@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1626845756044.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "4C2659A4",
+    "lastKnownWriteTime" : 1626942774,
+    "last_content_update" : 1626942773585,
+    "path" : "/media/sf_shareddisk/Rhapsody/new_article_clustering/clustering_all.R",
+    "project_path" : "clustering_all.R",
+    "properties" : {
+        "cursorPosition" : "16,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
