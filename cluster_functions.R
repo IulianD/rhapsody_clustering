@@ -608,6 +608,107 @@ prepare_cluster_abos <- function(with.hdl = TRUE){
   })
   
 }
+prepare_cluster_accelerate <- function(with.hdl = TRUE){
+  this.cohort <- 'accelerate'
+  if(with.hdl){
+    lb_filter_suffix <- "c('CPEPTIDE','HDL')"
+  } else {
+    lb_filter_suffix <-  "c('CPEPTIDE')"
+  }
+  
+  
+    dssShowFactors('lb')
+    dssSubset('hba', 'lb', row.filter = "LBTESTCD=='HBA1C'")
+    dssShowFactors('hba')
+    
+    dssSubsetByClass('hba', 'hba_vis', 'hba$VISIT')
+    ds.summary('hba_vis$SCREENI')
+    ds.names('hba_vis')
+    ds.summary('lb')
+  #  dssIsUnique('hba_vis$BASELINE$SUBJID') ## YESSS
+  
+  
+  #  dssSubset('hdl', 'lb', row.filter = "LBTESTCD=='HDL'")
+  #  dssShowFactors('hdl')
+  #  dssSubsetByClass('hdl', 'hdl_vis', 'hdl$VISIT')
+  #  ds.summary('hdl_vis$BASELINE')
+  #  dssIsUnique('hdl_vis$BASELINE$SUBJID') ## yess
+  
+  
+  
+  #  dssSubset('cpep', 'lb', row.filter = "LBTESTCD=='CPEPTIDE'")
+  #  dssShowFactors('cpep')
+  #  
+  #  dssSubsetByClass('cpep', 'cpep_vis', 'cpep$VISIT')
+  #  ds.summary('cpep_vis$BASELINE')
+  #  dssSubset('cpep_0', 'cpep_vis$BASELINE', row.filter = 'LBTPT ==  "0 min"', async = FALSE)
+  #  ds.summary('cpep_0')
+  #  dssIsUnique('cpep_0$SUBJID') #yes
+  
+  if(with.hdl){
+    rowfilter_abos <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min') | LBTESTCD == 'HDL') & VISIT == 'BASELINE'"
+  } else {
+    rowfilter_abos <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min')) & VISIT == 'BASELINE' "
+  }
+  
+  ### LB
+  dssSubset('lb2', 'lb', row.filter = rowfilter_abos, col.filter = "c('SUBJID', 'LBORRES', 'LBTESTCD')",  async = FALSE, datasources = opals[this.cohort] )
+  dssSubsetByClass('lb2', subsets = 'by_test', variables = 'lb2$LBTESTCD', async = FALSE, datasources = opals[this.cohort])
+  
+  available_tests <- ds.names('by_test', datasources = opals[this.cohort])[[this.cohort]]
+  join_source = paste('by_test$', available_tests, sep  = '')
+  sapply(available_tests, function(x){
+    
+    dssColNames(paste0('by_test$', x), c("SUBJID",x , "LBTESTCD"), datasources = opals[this.cohort])
+  })
+  dssShowFactors('by_test$CPEPTIDE')
+  
+  
+  dssJoin(join_source, 'comp_lb', join.type = 'inner', async = FALSE, datasources = opals[this.cohort])
+  dssSubset('comp_lb', 'comp_lb', col.filter = "c('SUBJID', 'CPEPTIDE', 'HBA1C', 'HDL')",datasources = opals[this.cohort])
+  
+  #VS2
+  dssSubset('comp_vs', 'vs', row.filter = "VSTESTCD == 'BMI' & VISIT == 'BASELINE'" , col.filter = "c('SUBJID', 'VSORRES')", async = FALSE, datasources = opals[this.cohort])
+  
+  dssSubset('comp_vs', 'comp_vs', row.filter ='SUBJID %in% comp_lb$SUBJID', async = FALSE, datasources = opals[this.cohort])
+  
+  
+  dssColNames('comp_vs', value = c('SUBJID', 'BMI'), async = FALSE, datasources = opals[this.cohort])
+  
+  #DM
+  
+  dssSubset('comp_dm', 'dm', col.filter = "c('SUBJID', 'AGE', 'SEX')", async = FALSE, datasources = opals[this.cohort])
+  # join
+  dssJoin(c('comp_lb', 'comp_vs', 'comp_dm'), 'join_all', by = 'SUBJID', join.type = 'inner', async = FALSE, datasources = opals[this.cohort])
+  
+  dssSubset('kmeans_input', 'join_all', col.filter = '!(colnames(join_all) %in% c("SUBJID", "SEX"))', async = FALSE, datasources = opals[this.cohort])
+  #  dssSubsetByClass('join_all', subsets = 'kmeans_by_sex', variables = 'join_all$SEX', keep.cols = eval(parse(text = needed_cols)), async = FALSE, datasources = opals[this.cohort])
+  #  dssSubset('kmeans_M', 'kmeans_by_sex$M', row.filter = '1==1', async = FALSE, datasources = opals[this.cohort])
+  #  dssSubset('kmeans_F', 'kmeans_by_sex$F', row.filter = '1==1', async = FALSE, datasources = opals[this.cohort])
+  
+  vars <- sapply(ds.colnames('kmeans_input', datasources = opals[this.cohort])[[this.cohort]], function(x){
+    this.col <- paste0('kmeans_input$',x)
+    ds.var(this.col, datasources = opals[this.cohort])
+  }, simplify = FALSE)
+  
+  fivesds <- sapply(vars, function(x){
+    5*sqrt(x$Variance.by.Study[1,1])
+    #x$Variance.by.Study[1,1]
+  }, simplify = FALSE) %>% unlist
+  
+  colm <- dssColMeans('kmeans_input', datasources = opals[this.cohort])[[this.cohort]]$means
+  
+  names(fivesds) <- names(colm)
+  
+  sapply(names(colm), function(x){
+    maxx <- colm[x] + fivesds[x]
+    minx <- colm[x] - fivesds[x]
+    my.filter <- paste0(x, ' > ', minx, ' & ', x, ' < ', maxx)
+    print(my.filter)
+    dssSubset('kmeans_input', 'kmeans_input', row.filter = my.filter, async = FALSE, datasources = opals[this.cohort])
+  })
+  
+}
 
 
 do_clustering <- function(cohorts, centers,

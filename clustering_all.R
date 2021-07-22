@@ -6,7 +6,7 @@ library(reshape2)
 library(ggplot2)
 library(scales)
 source('./cluster_functions.R')
-cohorts <- c(  'abos')
+cohorts <- c(  'accelerate')
 logindata <- read.delim('logindata_DSOpal.txt')
 logindata <- logindata[logindata$server %in% cohorts,,drop=FALSE] 
 opals <- datashield.login(logindata)
