@@ -615,7 +615,7 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
   } else {
     lb_filter_suffix <-  "c('CPEPTIDE')"
   }
-  
+   
   
     dssShowFactors('lb')
     dssSubset('hba', 'lb', row.filter = "LBTESTCD=='HBA1C'")
