@@ -646,13 +646,13 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
   #  dssIsUnique('cpep_0$SUBJID') #yes
   
   if(with.hdl){
-    rowfilter_accelerate <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min') | LBTESTCD == 'HDL') & VISIT == 'BASELINE'"
+    rowfilter_accelerate <- "(LBTESTCD=='HBA1C' | LBTESTCD == 'CPEPTIDE'  | LBTESTCD == 'HDL')"
   } else {
-    rowfilter_accelerate <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min')) & VISIT == 'BASELINE' "
+    rowfilter_accelerate <- "(LBTESTCD=='HBA1C' | LBTESTCD == 'CPEPTIDE')  "
   }
   
   ### LB
-  dssSubset('lb2', 'lb', row.filter = rowfilter_abos, ,  async = FALSE, datasources = opals[this.cohort] )
+  dssSubset('lb2', 'lb', row.filter = rowfilter_accelerate,  async = FALSE, datasources = opals[this.cohort] )
   dssSubsetByClass('lb2', subsets = 'by_test', variables = 'lb2$LBTESTCD', async = FALSE, datasources = opals[this.cohort])
   
   available_tests <- ds.names('by_test', datasources = opals[this.cohort])[[this.cohort]]
@@ -666,54 +666,58 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
                         Reduce(c,lapply(unique(SUBJID), function(x){
                         y <- ', ordered_name, '
                         this.vec <- unlist(y[y$SUBJID == x, "LBDTC"])
-                        dt <- min(this.vec)
-                        rt <-unlist(lapply(this.vec, function(t){
+                        if(length(levels(this.vec)) == 0 ){
+                          rt <- c(TRUE, rep(FALSE, length(this.vec) - 1))
+                        } else {
+                          dt <- min(as.vector(this.vec))
+                          rt <-unlist(lapply(this.vec, function(t){
                                     if (t==dt){
                                       return(TRUE)
                                     } else {
                                       return(FALSE)
                                     }
-                        }))
+                            }))
+                        }
                         return(rt)
                         }))
                   }')
     
-    # dssSubset(out_name, ordered_name, row.filter = row_filter_block, col.filter = 'c("SUBJID","LBORRES", "LBORRESU", "LBTESTCD")', async = FALSE, datasources = opals[this.cohort]) 
-    dssSubset(out_name, ordered_name, row.filter = row_filter_block, col.filter = 'c("SUBJID","LBORRES")', async = FALSE, datasources = opals[this.cohort]) 
-    dssColNames(out_name, value = c('SUBJID', this.test), async = FALSE, datasources = opals[this.cohort])
-    dssSubset(out_name, out_name, row.filter = '!duplicated(SUBJID)', datasources = opals[this.cohort])
-    #dssRbind(final_name, final_name, out_name, async = FALSE, datasources = opals[this.cohort])
+   
     
   })
   
   
   
-  join_source = paste('by_test$', available_tests, sep  = '')
-  sapply(available_tests, function(x){
-    
-    dssColNames(paste0('by_test$', x), c("SUBJID",x , "LBTESTCD"), datasources = opals[this.cohort])
-  })
-  dssShowFactors('by_test$CPEPTIDE')
+  join_source = paste( available_tests, '_first', sep  = '')
   
   
   dssJoin(join_source, 'comp_lb', join.type = 'inner', async = FALSE, datasources = opals[this.cohort])
-  dssSubset('comp_lb', 'comp_lb', col.filter = "c('SUBJID', 'CPEPTIDE', 'HBA1C', 'HDL')",datasources = opals[this.cohort])
   
   #VS2
-  dssSubset('comp_vs', 'vs', row.filter = "VSTESTCD == 'BMI' & VISIT == 'BASELINE'" , col.filter = "c('SUBJID', 'VSORRES')", async = FALSE, datasources = opals[this.cohort])
-  
-  dssSubset('comp_vs', 'comp_vs', row.filter ='SUBJID %in% comp_lb$SUBJID', async = FALSE, datasources = opals[this.cohort])
   
   
-  dssColNames('comp_vs', value = c('SUBJID', 'BMI'), async = FALSE, datasources = opals[this.cohort])
+  dssSubset('vs2', 'vs', row.filter = "(VSTESTCD == 'HEIGH' & VSORRESU == 'cm') | (VSTESTCD=='WEIGH' & VSORRESU == 'kg')" , async = TRUE, datasources = opals[this.cohort])
+  # take the mean of weight measurements:
+  dssPivot('wide_vs', 'vs2', value.var = 'VSORRES', formula = 'SUBJID ~ VSTESTCD ', fun.aggregate = 'mean' , async = TRUE, datasources = opals[this.cohort])
+  dssDeriveColumn('wide_vs', 'BMI', 'VSTESTCD.WEIGH/((VSTESTCD.HEIGH/100)^2)')
+  
+  dssSubset('wide_vs', 'wide_vs', col.filter = 'c("SUBJID", "BMI")')
+  
+  dssSubset('vsg', 'vs2', row.filter = 'VSTESTCD == "WEIGH"')
+  
+  
+  
+   dssSubset('comp_vs', 'wide_vs', row.filter ='SUBJID %in% comp_lb$SUBJID', async = FALSE, datasources = opals[this.cohort])
+  
   
   #DM
   
-  dssSubset('comp_dm', 'dm', col.filter = "c('SUBJID', 'AGE', 'SEX')", async = FALSE, datasources = opals[this.cohort])
+  dssSubset('comp_dm', 'dm', col.filter = "c('SUBJID', 'AGEIC', 'SEX')", async = FALSE, datasources = opals[this.cohort])
+  dssColNames('comp_dm', c('SUBJID', 'AGE', 'SEX'), datasources = opals[this.cohort])
   # join
   dssJoin(c('comp_lb', 'comp_vs', 'comp_dm'), 'join_all', by = 'SUBJID', join.type = 'inner', async = FALSE, datasources = opals[this.cohort])
   
-  dssSubset('kmeans_input', 'join_all', col.filter = '!(colnames(join_all) %in% c("SUBJID", "SEX"))', async = FALSE, datasources = opals[this.cohort])
+  dssSubset('kmeans_input', 'join_all', row.filter = 'complete.cases(join_all)',col.filter = '!(colnames(join_all) %in% c("SUBJID", "SEX"))', async = FALSE, datasources = opals[this.cohort])
   #  dssSubsetByClass('join_all', subsets = 'kmeans_by_sex', variables = 'join_all$SEX', keep.cols = eval(parse(text = needed_cols)), async = FALSE, datasources = opals[this.cohort])
   #  dssSubset('kmeans_M', 'kmeans_by_sex$M', row.filter = '1==1', async = FALSE, datasources = opals[this.cohort])
   #  dssSubset('kmeans_F', 'kmeans_by_sex$F', row.filter = '1==1', async = FALSE, datasources = opals[this.cohort])
@@ -761,8 +765,11 @@ do_clustering <- function(cohorts, centers,
     }
   }
   cluster_measures <- cluster_measures[[1]]
-  
-  ktot <- dssKmeans(kmeans.input, centers = centers, iter.max = iter.max, nstart = nstart, async = TRUE, datasources = opals[cohorts])
+  ktype = 'combine'
+  #if(length(cohorts) == 1){
+  #  ktype = 'split'
+ # }
+  ktot <- dssKmeans(kmeans.input, centers = centers, iter.max = iter.max, nstart = nstart, type = ktype, async = TRUE, datasources = opals[cohorts])
   #x <- ktot$good$cluster
   #perc <- round(100*x/sum(x))
   #dssSubsetByClass('kmeans_input', subsets = 'by_cluster', variables = 'kmeans_input_scaled_km_clust5', keep.cols = c('AGE', 'BMI', 'CPEPTIDE', 'HBA1C', 'HDL'))
