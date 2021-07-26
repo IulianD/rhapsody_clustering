@@ -646,16 +646,48 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
   #  dssIsUnique('cpep_0$SUBJID') #yes
   
   if(with.hdl){
-    rowfilter_abos <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min') | LBTESTCD == 'HDL') & VISIT == 'BASELINE'"
+    rowfilter_accelerate <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min') | LBTESTCD == 'HDL') & VISIT == 'BASELINE'"
   } else {
-    rowfilter_abos <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min')) & VISIT == 'BASELINE' "
+    rowfilter_accelerate <- "(LBTESTCD=='HBA1C' | (LBTESTCD == 'CPEPTIDE' & LBTPT ==  '0 min')) & VISIT == 'BASELINE' "
   }
   
   ### LB
-  dssSubset('lb2', 'lb', row.filter = rowfilter_abos, col.filter = "c('SUBJID', 'LBORRES', 'LBTESTCD')",  async = FALSE, datasources = opals[this.cohort] )
+  dssSubset('lb2', 'lb', row.filter = rowfilter_abos, ,  async = FALSE, datasources = opals[this.cohort] )
   dssSubsetByClass('lb2', subsets = 'by_test', variables = 'lb2$LBTESTCD', async = FALSE, datasources = opals[this.cohort])
   
   available_tests <- ds.names('by_test', datasources = opals[this.cohort])[[this.cohort]]
+  sapply(available_tests, function(this.test){
+    ordered_name <- paste0('by_test_', this.test)
+    out_name <- paste0(this.test, '_first')
+    dssSubset(ordered_name, paste0('by_test$', this.test), row.filter = 'order(SUBJID)', async = FALSE, datasources = opals[this.cohort])
+    
+    
+    row_filter_block <- paste0('{
+                        Reduce(c,lapply(unique(SUBJID), function(x){
+                        y <- ', ordered_name, '
+                        this.vec <- unlist(y[y$SUBJID == x, "LBDTC"])
+                        dt <- min(this.vec)
+                        rt <-unlist(lapply(this.vec, function(t){
+                                    if (t==dt){
+                                      return(TRUE)
+                                    } else {
+                                      return(FALSE)
+                                    }
+                        }))
+                        return(rt)
+                        }))
+                  }')
+    
+    # dssSubset(out_name, ordered_name, row.filter = row_filter_block, col.filter = 'c("SUBJID","LBORRES", "LBORRESU", "LBTESTCD")', async = FALSE, datasources = opals[this.cohort]) 
+    dssSubset(out_name, ordered_name, row.filter = row_filter_block, col.filter = 'c("SUBJID","LBORRES")', async = FALSE, datasources = opals[this.cohort]) 
+    dssColNames(out_name, value = c('SUBJID', this.test), async = FALSE, datasources = opals[this.cohort])
+    dssSubset(out_name, out_name, row.filter = '!duplicated(SUBJID)', datasources = opals[this.cohort])
+    #dssRbind(final_name, final_name, out_name, async = FALSE, datasources = opals[this.cohort])
+    
+  })
+  
+  
+  
   join_source = paste('by_test$', available_tests, sep  = '')
   sapply(available_tests, function(x){
     
