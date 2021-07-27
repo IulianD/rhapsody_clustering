@@ -18,13 +18,13 @@ my.smooth2d <-  function (x, y, npoints = 128,
                       keep.cols = keep.cols, async = async, wait = wait, 
                       datasources = datasources)
   }
-  bandwidth.arg <- dsCDISCclient:::.encode.arg(bandwidth)
-  lims.arg <- dsCDISCclient:::.encode.arg(lims)
-  holder <- dsCDISCclient:::.encode.arg(holder)
+  bandwidth.arg <- dsSwissKnifeclient:::.encode.arg(bandwidth)
+  lims.arg <- dsSwissKnifeclient:::.encode.arg(lims)
+  holder <- dsSwissKnifeclient:::.encode.arg(holder)
   expr <- paste0("partial.kde2d('", holder, "', '", x, "', '", 
                  y, "','", bandwidth.arg, "','", lims.arg, "',", npoints, 
                  ")")
-  res <- opal::datashield.aggregate(datasources, as.symbol(expr), 
+  res <- datashield.aggregate(datasources, as.symbol(expr), 
                                     async = FALSE, wait = wait)
   res <- res[!sapply(res, is.null)]
   if (length(res) == 0) {
@@ -87,12 +87,12 @@ my.smooth2d <-  function (x, y, npoints = 128,
   
           }
 
-          image(this.set[[this.name]], col = dsCDISCclient:::.add.alpha(colorRampPalette(c(startcols[[this.name]], 
+          image(this.set[[this.name]], col = dsSwissKnifeclient:::.add.alpha(colorRampPalette(c(startcols[[this.name]], 
                                                                                            endcols[[this.name]]))(shades), c(0,rep(this.alpha, length.out = shades-1 ))), 
                 xlab = xlab, ylab = ylab, axes = axes)
           
         } else {
-          image(this.set[[this.name]], col = dsCDISCclient:::.add.alpha(colorRampPalette(c(startcols[[this.name]], 
+          image(this.set[[this.name]], col = dsSwissKnifeclient:::.add.alpha(colorRampPalette(c(startcols[[this.name]], 
                                                                                            endcols[[this.name]]))(shades), c(0, seq(0.2, 
                                                                                                                                     0.8, length.out = shades - 1))), xlab = xlab, 
                 ylab = ylab, axes = axes)
@@ -763,12 +763,12 @@ do_clustering <- function(cohorts, centers,
     if(length(Reduce(setdiff, cluster_measures)) > 0 ){
       stop('The input dataframe has different columns on different nodes.')
     }
+    ktype <- 'combine'
+  } else {
+    ktype <- 'split'
   }
   cluster_measures <- cluster_measures[[1]]
-  ktype = 'combine'
-  #if(length(cohorts) == 1){
-  #  ktype = 'split'
- # }
+
   ktot <- dssKmeans(kmeans.input, centers = centers, iter.max = iter.max, nstart = nstart, type = ktype, async = TRUE, datasources = opals[cohorts])
   #x <- ktot$good$cluster
   #perc <- round(100*x/sum(x))
