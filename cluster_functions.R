@@ -194,7 +194,7 @@ prepare_cluster_andis <-  function(with.hdl = TRUE){
     dssRbind(ordered_name, final, ordered_name, async = FALSE, datasources = opals[this.cohort])
 }
   
-  join_input <- c('ordered_HBA1C', 'lb_CPEP')
+  join_input <- c('lb_CPEP','ordered_HBA1C')
   if(with.hdl){
     join_input <- c(join_input, 'ordered_HDL')
   }
@@ -214,15 +214,16 @@ prepare_cluster_andis <-  function(with.hdl = TRUE){
   
   
   if(with.hdl){
-    output_cols <- 'c("AGE", "BMI", "CPEP", "HBA1C", "HDL")'
+    
+    output_cols <- 'c("CPEP",  "HBA1C", "HDL" , "BMI", "AGE" )'
   } else {
-    output_cols <- 'c("AGE", "BMI", "CPEP", "HBA1C")'
+    output_cols <- 'c("CPEP",  "HBA1C", "BMI", "AGE" )'
   }
   dssSubset('kmeans_input', 'join_all', col.filter = output_cols, async = FALSE, datasources = opals[this.cohort])
   #dssSubsetByClass('join_all', subsets = 'kmeans_by_sex', variables = 'join_all$SEX', keep.cols = eval(parse(text = output_cols)), async = FALSE, datasources = opals[this.cohort])
   #dssSubset('kmeans_M', 'kmeans_by_sex$M', row.filter = '1==1', async = FALSE, datasources = opals[this.cohort])
   #dssSubset('kmeans_F', 'kmeans_by_sex$F', row.filter = '1==1', async = FALSE, datasources = opals[this.cohort])
-  
+  dssColNames('kmeans_input', c("CPEPTIDE",  "HBA1C", "HDL" , "BMI", "AGE" ), datasources = opals[this.cohort])
   vars <- sapply(ds.colnames('kmeans_input', datasources = opals[this.cohort])[[this.cohort]], function(x){
     this.col <- paste0('kmeans_input$',x)
     ds.var(this.col, datasources = opals[this.cohort])
@@ -402,7 +403,7 @@ prepare_cluster_godarts <- function(with.hdl = TRUE){
     lb_filter_suffix <-  "c('CPEPTIDE')"
   }
   dssSubset('mh2', 'mh', row.filter = "(MHTERM %in% c('TYPE 2 DIABETES')) & MHOCCUR == 'Y' ", async = FALSE, datasources = opals[this.cohort])
-  rowfilter_godarts <- paste0("(SUBJID %in% mh2$SUBJID) & (LBTESTCD=='HBA1C' & LBMETHOD=='IFCC' & LBORRESU=='mmol/mol') | (LBTESTCD %in% ", lb_filter_suffix, ")")
+  rowfilter_godarts <- paste0("(SUBJID %in% mh2$SUBJID) & (LBTESTCD=='HBA1C' & LBORRESU=='mmol/mol') | (LBTESTCD %in% ", lb_filter_suffix, ")")
   dssSubset('lb2', 'lb', row.filter = rowfilter_godarts, async = FALSE, datasources = opals[this.cohort] )
   dssSubsetByClass('lb2', subsets = 'by_test', variables = 'lb2$LBTESTCD', async = FALSE, datasources = opals[this.cohort])
  available_tests <- ds.names('by_test', datasources = opals[this.cohort])[[this.cohort]]
@@ -560,7 +561,7 @@ prepare_cluster_abos <- function(with.hdl = TRUE){
     
     dssColNames(paste0('by_test$', x), c("SUBJID",x , "LBTESTCD"), datasources = opals[this.cohort])
   })
-  dssShowFactors('by_test$CPEPTIDE')
+
 
   
   dssJoin(join_source, 'comp_lb', join.type = 'inner', async = FALSE, datasources = opals[this.cohort])
@@ -617,16 +618,7 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
   }
    
   
-    dssShowFactors('lb')
-    dssSubset('hba', 'lb', row.filter = "LBTESTCD=='HBA1C'")
-    dssShowFactors('hba')
     
-    dssSubsetByClass('hba', 'hba_vis', 'hba$VISIT')
-    ds.summary('hba_vis$SCREENI')
-    ds.names('hba_vis')
-    ds.summary('lb')
-  #  dssIsUnique('hba_vis$BASELINE$SUBJID') ## YESSS
-  
   
   #  dssSubset('hdl', 'lb', row.filter = "LBTESTCD=='HDL'")
   #  dssShowFactors('hdl')
@@ -682,10 +674,11 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
                         }))
                   }')
     
-   
-    
+    dssSubset(out_name, ordered_name, row.filter = row_filter_block, col.filter = "c('SUBJID', 'LBORRES')", async = FALSE, datasources = opals[this.cohort])
+    dssColNames(out_name, c('SUBJID', this.test),  async = FALSE, datasources = opals[this.cohort])
   })
   
+ 
   
   
   join_source = paste( available_tests, '_first', sep  = '')
@@ -699,11 +692,11 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
   dssSubset('vs2', 'vs', row.filter = "(VSTESTCD == 'HEIGH' & VSORRESU == 'cm') | (VSTESTCD=='WEIGH' & VSORRESU == 'kg')" , async = TRUE, datasources = opals[this.cohort])
   # take the mean of weight measurements:
   dssPivot('wide_vs', 'vs2', value.var = 'VSORRES', formula = 'SUBJID ~ VSTESTCD ', fun.aggregate = 'mean' , async = TRUE, datasources = opals[this.cohort])
-  dssDeriveColumn('wide_vs', 'BMI', 'VSTESTCD.WEIGH/((VSTESTCD.HEIGH/100)^2)')
+  dssDeriveColumn('wide_vs', 'BMI', 'VSTESTCD.WEIGH/((VSTESTCD.HEIGH/100)^2)', datasources = opals[this.cohort])
   
-  dssSubset('wide_vs', 'wide_vs', col.filter = 'c("SUBJID", "BMI")')
+  dssSubset('wide_vs', 'wide_vs', col.filter = 'c("SUBJID", "BMI")', datasources = opals[this.cohort])
   
-  dssSubset('vsg', 'vs2', row.filter = 'VSTESTCD == "WEIGH"')
+  dssSubset('vsg', 'vs2', row.filter = 'VSTESTCD == "WEIGH"', datasources = opals[this.cohort])
   
   
   
@@ -765,7 +758,7 @@ do_clustering <- function(cohorts, centers,
     }
     ktype <- 'combine'
   } else {
-    ktype <- 'split'
+    ktype <- 'combine'
   }
   cluster_measures <- cluster_measures[[1]]
 
@@ -801,7 +794,7 @@ do_clustering <- function(cohorts, centers,
   #values <- c("#4DB3E6","#132B41","#E69900","#CC80B3","#8B1A4F","#00B399")
   #values <- c("#4DB3E6","#CC80B3","#132B41","#00B399","#8B1A4F","#E69900")
   
-  list( 
+  x <- list( 
     input = sapply(names(quants), function(this.cluster){
       t(Reduce(cbind, quants[[this.cluster]])) %>% 
         #  data.frame(measurement = names(quants[[this.cluster]]), cluster = rep(this.cluster,5) )
@@ -854,8 +847,9 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
     data.frame(out, xx[,c(6,7,8)])
   }, simplify = FALSE)
 
-  yyy <- Reduce(rbind, xxx) %>% melt
-  n <- input.list$cluster.object$global$size
+  yyy <- Reduce(rbind, xxx) %>% melt#
+#  n <- input.list$cluster.object$global$size
+  n <- input.list$cluster.object[[1]]$size
   names(n) <- paste('X', names(n), sep = '')
   cluster_labeller <- function(val){
   sapply(val, function(a){
@@ -874,7 +868,7 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
     ylab("Level")+
     xlab("Measurement")
   
-  dfclust <- as.data.frame(unclass(input.list$cluster.object$global$size))
+  dfclust <- as.data.frame(unclass(input.list$cluster.object[[1]]$size))
   names(dfclust) <- 'freq'
   dfclust$clust <- factor(legend.labels)
   dfclust$newy <- (dfclust$freq/2 + c(0, cumsum(dfclust$freq)[-length(dfclust$freq)]))
@@ -897,7 +891,7 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
     plot(by_cluster, vp = viewport(layout.pos.row = 2, layout.pos.col = 1:4))
     dev.off()
   }
-  invisible(list(by_measure = by_measure, by_cluster = by_cluster, percentages = p2))
+  invisible(list(by_measure = by_measure, by_cluster = by_cluster, percentages = p2, pre_gginput = pre_gginput))
 }
 
 do_pca <- function( cluster_obj, input_df = 'kmeans_input_scaled'){
