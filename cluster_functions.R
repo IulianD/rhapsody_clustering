@@ -743,7 +743,10 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
 do_clustering <- function(cohorts, centers,
                           input.name = 'kmeans_input', with.scaling = TRUE, iter.max = 30, nstart =30){
 
-  if(with.scaling){
+ dssDeriveColumn(input.name, 'AGE', 'as.numeric(AGE)', datasources = opals[cohorts])
+  
+  
+   if(with.scaling){
     
     kmeans.input = paste0(input.name, '_scaled')
     dssScale(kmeans.input, input.name, datasources = opals[cohorts])
@@ -778,23 +781,42 @@ do_clustering <- function(cohorts, centers,
     
 #  }, simplify = FALSE)
   
-  quants <- sapply(ds.names('by_cluster', datasources = opals[cohorts])[[1]], function(x){
+  clusters_by_cohort <- ds.names('by_cluster', datasources = opals[cohorts])
+  cohorts_by_cluster <- dssSwapKeys(clusters_by_cohort)
+  
+#  quants <- sapply(ds.names('by_cluster', datasources = opals[cohorts])[[1]], function(x){
+    
+#    dfname <- paste0('by_cluster$', x)
+    
+#    sapply(cluster_measures, function(y){
+#      colname <- paste0(dfname, '$', y)
+#      ds.quantileMean(colname, datasources = opals[cohorts])
+#    }, simplify = FALSE)
+    
+#  }, simplify = FALSE)
+  
+quants <- sapply(Reduce(union,clusters_by_cohort), function(x){
+    
     dfname <- paste0('by_cluster$', x)
+    relevant_cohorts <- cohorts_by_cluster[[x]]
     sapply(cluster_measures, function(y){
       colname <- paste0(dfname, '$', y)
-      ds.quantileMean(colname, datasources = opals[cohorts])
+      
+      ds.quantileMean(colname, datasources = opals[relevant_cohorts])
     }, simplify = FALSE)
     
   }, simplify = FALSE)
   
-  
+
   
   
   
   #values <- c("#4DB3E6","#132B41","#E69900","#CC80B3","#8B1A4F","#00B399")
   #values <- c("#4DB3E6","#CC80B3","#132B41","#00B399","#8B1A4F","#E69900")
   
-  x <- list( 
+
+  
+ list( 
     input = sapply(names(quants), function(this.cluster){
       t(Reduce(cbind, quants[[this.cluster]])) %>% 
         #  data.frame(measurement = names(quants[[this.cluster]]), cluster = rep(this.cluster,5) )
@@ -835,7 +857,7 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
     scale_fill_manual(values=values) +
     theme(axis.text.x = element_text(angle=90, vjust=0.5, hjust=1))+
     ylab("Level")+
-    xlab("Cluster") + ggtitle(paste0("Combined males and females, cohorts: ", paste(cohorts, collapse = ', '), ", N = ", sum(input.list$cluster.object$good$cluster)))
+    xlab("Cluster") + ggtitle(paste0("Combined males and females, cohorts: ", paste(cohorts, collapse = ', '), ", N = ", sum(input.list$cluster.object$global$cluster)))
   
   
   xxx <- sapply(levels(pre_gginput$measurement), function(this.level){

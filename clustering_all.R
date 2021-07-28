@@ -8,6 +8,7 @@ library(scales)
 library(grid)
 source('./cluster_functions.R')
 cohorts <- c(  'abos', 'accelerate', 'andis','dcs', 'godarts')
+#cohorts <- c('godarts')
 logindata <- read.delim('../logindata_DSOpal.txt')
 logindata <- logindata[logindata$server %in% cohorts,,drop=FALSE] 
 opals <- datashield.login(logindata)
@@ -99,3 +100,7 @@ earlies <- hdl[{
   }))
 },]
 
+
+expr <- list(as.symbol('partialKmeans'), 'kmeans_input', dsSwissKnifeClient:::.encode.arg(as.data.frame(my_centers)), NULL, TRUE)
+# kms <- datashield.aggregate(datasources, as.symbol(expr), async = async)
+kms <- datashield.aggregate(opals['abos'], as.call(expr), async = FALSE)
