@@ -741,7 +741,7 @@ prepare_cluster_accelerate <- function(with.hdl = TRUE){
 
 
 do_clustering <- function(cohorts, centers,
-                          input.name = 'kmeans_input', with.scaling = TRUE, iter.max = 30, nstart =30){
+                          input.name = 'kmeans_input', with.scaling = TRUE, iter.max = 30, nstart =30, ktype = 'combine'){
 
  dssDeriveColumn(input.name, 'AGE', 'as.numeric(AGE)', datasources = opals[cohorts])
   
@@ -759,10 +759,8 @@ do_clustering <- function(cohorts, centers,
     if(length(Reduce(setdiff, cluster_measures)) > 0 ){
       stop('The input dataframe has different columns on different nodes.')
     }
-    ktype <- 'combine'
-  } else {
-    ktype <- 'combine'
-  }
+    
+  } 
   cluster_measures <- cluster_measures[[1]]
 
   ktot <- dssKmeans(kmeans.input, centers = centers, iter.max = iter.max, nstart = nstart, type = ktype, async = TRUE, datasources = opals[cohorts])

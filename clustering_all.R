@@ -1,4 +1,5 @@
 pkgload::load_all('/media/sf_shareddisk/datashield/dsSwissKnifeClient')
+pkgload::load_all('/media/sf_shareddisk/datashield/dsSwissKnife')
 pkgload::load_all('/media/sf_shareddisk/datashield/dsHelpersClient')
 library(dsBaseClient)
 library(magrittr)
@@ -8,8 +9,8 @@ library(scales)
 library(grid)
 source('./cluster_functions.R')
 cohorts <- c(  'abos', 'accelerate', 'andis','dcs', 'godarts')
-cohorts <- c(  'abos', 'andis','dcs', 'godarts')
-#cohorts <- c('godarts')
+cohorts <- c( 'andis','dcs', 'godarts')
+cohorts <- c('accelerate')
 logindata <- read.delim('../logindata_DSOpal.txt')
 logindata <- logindata[logindata$server %in% cohorts,,drop=FALSE] 
 opals <- datashield.login(logindata)
@@ -27,7 +28,51 @@ prepare_cluster_dcs(with.hdl = TRUE)
 prepare_cluster_accelerate(with.hdl = TRUE)
 prepare_cluster_abos(with.hdl = TRUE)
 
-clusters_all <- do_clustering(cohorts, centers = 5, iter.max = 20, nstart = 10)
+clusters_all <- do_clustering(cohorts, centers = 5, iter.max = 20, nstart = 5)
+datashield.symbols(opals)
+ds.summary('kmeans_input_scaled_km_clust5')
+ds.cbind(c('kmeans_input_scaled','kmeans_input_scaled_km_clust5'), newobj = 'kmeans_output');
+ds.summary('kmeans_output')
+dssColNames('kmeans_output', value = 'cluster_number', to.replace = 'kmeans_input_scaled_km_clust5')
+dssShowFactors('kmeans_output')
+ds.class('kmeans_output$cluster_number')
+dssSubset("forests_train", "kmeans_output", row.filter = 'sample(nrow(kmeans_output),nrow(kmeans_output)*8/10)', datasources = opals)
+dssSubset("forests_test", "kmeans_output", row.filter = '!(rownames(kmeans_output) %in% rownames(forests_train))', datasources = opals)
+ds.summary('forests_train')
+ds.summary('forests_test')
+forests <- dssRandomForest(train = list(what = 'forests_train', dep_var = 'cluster_number'))
+pred <- dssRandomForest(test = list(forests = forests,testData = 'forests_test'), train = NULL)
+sapply(pred, function(x) x$accuracy)
+sapply(pred, function(x) x$confusion_matrix)
+pca <- dssPrincomp('kmeans_output')
+ds.summary('kmeans_output_scores')
+dssMean('kmeans_output_scores$Comp.1')
+biplot(pca$global,choices = c(1,2), draw.arrows = FALSE, levels = 'kmeans_output_scores$cluster_number')
+biplot(pca$global,choices = c(1,3), draw.arrows = FALSE, levels = 'kmeans_output_scores$cluster_number')
+biplot(pca$global,choices = c(2,3), draw.arrows = FALSE, levels = 'kmeans_output_scores$cluster_number')
+
+
+#xxx_tst <- data.frame(CPEPTIDE =c(-1.21736769, -1.01701768, -0.63200772, -0.11906342,  0.50552169 , 1.20010862,  1.76977853,  0.02650179 ),
+#                      HBA1C=c(-1.121462754, -1.028895100, -0.658624487, -0.195786219,  0.452187354,  1.192728582,  1.840702156, -0.006046347),
+#                      HDL = c(1.39329268, -1.22391599, -0.71578591, -0.17378049,  0.53760163,  1.31673442,  1.84857724, -0.01881389),
+#                      BMI = c(-1.4763975, -1.1975066, -0.7359768, -0.1080810,  0.5409829,  1.2464616,  1.6981353, -0.0284235),
+#                      AGE = c(-1.69083875, -1.28110588, -0.53558678,  0.02117467,  0.72060924,  1.18177489,  1.57078733,  0.01402004 ),
+#                      cluster_number  = c(1,2,3,4,5,3,2,4))
+
+
+#f <- .encode.arg(forests, serialize.it = TRUE)
+#forestDSS('test', 'testData',f )
+#sil <- Reduce(rbind,clusters_all$cluster.object$global$silhouette)
+#mean(sil[,3])
+clusters_split <- do_clustering(cohorts, centers = 5, iter.max = 30, nstart = 10, ktype = 'split')
+
+
+xx <-matrix(nrow=0, ncol=3)
+for (i in clusters_split$cluster.object){
+xx <- rbind(xx,i$silhouette)
+}
+mean(xx[,3])
+
 gg <- do_ggplot(clusters_all,cluster.labels = c('3/SIRD', '2/SIDD' ,'5/MARD/low HDL' , '6/MARD/high HDL', '4/MOD'), create.pdf = TRUE)
 do_pca(clusters_all)
 #c('3/SIRD','5/MARD/low HDL'  , '6/MARD/high HDL', '4/MOD', '2/SIDD')
@@ -99,9 +144,6 @@ earlies <- hdl[{
     }
     return(rt)
   }))
-},]
-
-
 expr <- list(as.symbol('partialKmeans'), 'kmeans_input', dsSwissKnifeClient:::.encode.arg(as.data.frame(my_centers)), NULL, TRUE)
 # kms <- datashield.aggregate(datasources, as.symbol(expr), async = async)
 kms <- datashield.aggregate(opals['abos'], as.call(expr), async = FALSE)
