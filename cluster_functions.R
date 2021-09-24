@@ -805,8 +805,19 @@ quants <- sapply(Reduce(union,clusters_by_cohort), function(x){
     
   }, simplify = FALSE)
   
-
+quants2 <- sapply(Reduce(union,clusters_by_cohort), function(x){
   
+  dfname <- paste0('by_cluster$', x)
+  relevant_cohorts <- cohorts_by_cluster[[x]]
+  sapply(cluster_measures, function(y){
+    colname <- paste0(dfname, '$', y)
+    
+    ds.quantileMean(colname, datasources = opals[relevant_cohorts], type = 'split')
+  }, simplify = FALSE)
+  
+}, simplify = FALSE)
+
+quants2 <- dssSwapKeys(sapply(quants2, dssSwapKeys))
   
   
   #values <- c("#4DB3E6","#132B41","#E69900","#CC80B3","#8B1A4F","#00B399")
@@ -820,13 +831,25 @@ quants <- sapply(Reduce(union,clusters_by_cohort), function(x){
         #  data.frame(measurement = names(quants[[this.cluster]]), cluster = rep(this.cluster,5) )
         data.frame(measurement = names(quants[[this.cluster]]), cluster = rep(this.cluster,length(cluster_measures)) )
     }, simplify = FALSE) %>% Reduce(rbind,.),
+
+    split_input = sapply(names(quants2), function(this.cohort){
+      sapply(names(quants2[[this.cohort]]), function(this.cluster){
+        t(Reduce(cbind, quants2[[this.cohort]][[this.cluster]])) %>% 
+          #  data.frame(measurement = names(quants[[this.cluster]]), cluster = rep(this.cluster,5) )
+          data.frame(measurement = names(quants2[[this.cohort]][[this.cluster]]), cluster = rep(this.cluster, length(cluster_measures)) )
+      }, simplify = FALSE) %>% Reduce(rbind,.)
+    }, simplify = FALSE),
     cluster.object = ktot, 
-    cohorts = cohorts
+    cohorts = cohorts,
+    quants2 = quants2,
+    quants = quants,
+    split_lengths = sapply(ds.summary(kmeans.input, datasources = opals[cohorts]), function(x)x$`number of rows`)
   )
 }
 
 do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD', '5/MARD/low HDL', '6/MARD/high HDL'), create.pdf = TRUE){
-  
+  args <- as.list(match.call())[-1]
+  split_gg <- do.call(split_ggplot, args)
   cohorts <- input.list$cohorts
   pre_gginput <- input.list$input[, c('X5.', 'X25.', 'X50.', 'X75.', 'X95.', 'measurement', 'cluster')] 
   pre_gginput$newclust <- rep(NA,nrow(pre_gginput))
@@ -855,7 +878,7 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
     scale_fill_manual(values=values) +
     theme(axis.text.x = element_text(angle=90, vjust=0.5, hjust=1))+
     ylab("Level")+
-    xlab("Cluster") + ggtitle(paste0("Combined males and females, cohorts: ", paste(cohorts, collapse = ', '), ", N = ", sum(input.list$cluster.object$global$cluster)))
+    xlab("Cluster") + ggtitle(paste0("Combined males and females, cohorts: ",  paste(clusters_all$cohorts,  collapse = ', '), ", N = ", sum(input.list$split_lengths[cohorts])))
   
   
   xxx <- sapply(levels(pre_gginput$measurement), function(this.level){
@@ -866,13 +889,13 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
     })
     data.frame(out, xx[,c(6,7,8)])
   }, simplify = FALSE)
-
+  
   yyy <- Reduce(rbind, xxx) %>% melt#
-#  n <- input.list$cluster.object$global$size
+  #  n <- input.list$cluster.object$global$size
   n <- input.list$cluster.object[[1]]$size
   names(n) <- paste('X', names(n), sep = '')
   cluster_labeller <- function(val){
-  sapply(val, function(a){
+    sapply(val, function(a){
       cl <- pre_gginput[pre_gginput$newclust == a, 'cluster'][1]
       paste0(a, ', N = ', n[cl])
     })
@@ -884,7 +907,7 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
     theme(axis.text.x = element_text(angle=90, vjust=0.5, hjust=1))+
     theme(legend.position="none") +
     scale_fill_manual(values=values) +
-    ggtitle("Combined males and females grouped by cluster")+
+    ggtitle(paste0("Combined males and females grouped by cluster, cohorts: ",  paste(clusters_all$cohorts,  collapse = ', '), ", N = ", sum(input.list$split_lengths[cohorts])))+
     ylab("Level")+
     xlab("Measurement")
   
@@ -893,25 +916,127 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
   dfclust$clust <- factor(legend.labels)
   dfclust$newy <- (dfclust$freq/2 + c(0, cumsum(dfclust$freq)[-length(dfclust$freq)]))
   dfclust$value <- round(dfclust$freq / sum(dfclust$freq),2)
-  p2 <-ggplot(dfclust, aes(x=clust, y = value, fill = clust)) +
+  
+ # p2 <-ggplot(dfclust, aes(x=clust, y = value, fill = clust)) +
+    p2 <-ggplot(dfclust, aes(x="", y = value, fill = clust)) +
     #geom_text(aes(y = freq, label = paste0(freq,"\n", percent(value))), size=4)+
     geom_bar(width = 1, stat='identity')+
-    #coord_polar("y", start=0, direction = -1)+
+    coord_polar("y", start=0, direction = -1)+
     #theme(axis.text.x=element_blank()) +
-    geom_text(aes( label = paste0(freq,"\n", percent(value))), size=4, colour = 'white', hjust = 1.6)+  
+  #  geom_text(aes( label = paste0(freq,"\n", percent(value))), size=4, colour = 'white', hjust = 1.6)+  
+    geom_text(aes( label = paste0(freq,"\n", percent(value))), size=4, colour = 'white', position = position_stack(vjust = 0.5))+  
     theme_minimal() +
-    theme(legend.position="none", axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank()) +
-    scale_fill_manual(values=values) + coord_flip()
+    theme(legend.position="none", axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank())+
+    scale_fill_manual(values=values) 
+   coord_flip()
   nclust <- length(levels(pre_gginput$cluster))
   if(create.pdf){
-    pdf(paste0(nclust, ' Clusters combined ', paste(cohorts, collapse = ', '),".pdf"), height=12, width=20)
-    pushViewport(viewport(layout = grid.layout(nrow = 2, ncol = 6)))
+ #   pdf(paste0(nclust, ' Clusters combined ', paste(cohorts, collapse = ', '),".pdf"), height=12, width=20)
+    pdf(paste0(nclust, ' Clusters combined ', paste(cohorts, collapse = ', '),".pdf"), height=48, width=20)
+    
+    pushViewport(viewport(layout = grid.layout(nrow = 2* length(split_gg$by_cluster_split) + 2, ncol = 6)))
     plot(by_measure, vp = viewport(layout.pos.row = 1, layout.pos.col = 1:4))
-    plot(p2, vp = viewport(layout.pos.row = 1, layout.pos.col = 5:6))
+    plot(p2, vp = viewport(layout.pos.row = 1:2, layout.pos.col = 5:6))
     plot(by_cluster, vp = viewport(layout.pos.row = 2, layout.pos.col = 1:4))
+    
+    for(i in 1:length(split_gg$by_measure_split)){
+      plot(split_gg$by_measure_split[[i]], vp = viewport(layout.pos.row = i + 2, layout.pos.col = 1:4))
+    }
+    for(i in 1:length(split_gg$by_cluster_split)){
+   
+      plot(split_gg$by_cluster_split[[i]], vp = viewport(layout.pos.row = length(split_gg$by_cluster_split) + i +2, layout.pos.col = 1:4))
+    }
+    
     dev.off()
   }
-  invisible(list(by_measure = by_measure, by_cluster = by_cluster, percentages = p2, pre_gginput = pre_gginput))
+  ret <- split_gg
+  ret$by_measure <- by_measure 
+  ret$by_cluster <- by_cluster 
+  ret$percentages <- p2 
+  ret$pre_gginput <- pre_gginput
+  #invisible(by_measure = by_measure, by_cluster = by_cluster, percentages = p2, pre_gginput = pre_gginput)
+  invisible(ret)
+}
+
+
+
+
+split_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD', '5/MARD/low HDL', '6/MARD/high HDL'), create.pdf = TRUE){
+
+  by_cluster_split <- list()
+  by_measure_split <- list()
+  cohorts <- input.list$cohorts
+  for(i in names(input.list$split_input)){
+    pre_ggin <- input.list$split_input[[i]][, c('X5.', 'X25.', 'X50.', 'X75.', 'X95.', 'measurement', 'cluster')] 
+   
+    pre_ggin$newclust <- rep(NA,nrow(pre_ggin))
+    cluster.lbls <- cluster.labels
+    if(!is.null(cluster.lbls)){
+    
+      for(cl.name in sort(levels(pre_ggin$cluster))){
+        pre_ggin[pre_ggin$cluster == cl.name,'newclust'] <- cluster.lbls[1]
+        cluster.lbls <- cluster.lbls[-1]
+      }
+    } else {
+      pre_ggin$newclust <- pre_ggin$cluster
+    }
+    
+    legend.labels <- cluster.lbls
+    pre_ggin$newclust <- factor(pre_ggin$newclust)
+    ggin <- melt(pre_ggin)
+    values <- c("#4DB3E6","#00B399","#E69900","#CC80B3","#8B1A4F", "#132B41")
+    by_measure_split[[i]] <- ggplot(ggin,aes(x = newclust, y = value, fill = newclust)) +
+      geom_boxplot() +
+    #  facet_wrap(~measurement, scale="free", ncol=6) +
+      facet_wrap(~measurement, scale="free", ncol=length(levels(pre_ggin$measurement))) +
+      scale_fill_manual(values=values) +
+      theme(axis.text.x = element_text(angle=90, vjust=0.5, hjust=1))+
+      ylab("Level")+
+      xlab("Cluster") + ggtitle(paste0("Combined males and females, cohort: ", i, ", N = ", input.list$split_lengths[i]))
+  
+  
+    xxx <- sapply(levels(pre_ggin$measurement), function(this.level){
+      xx <- pre_ggin[pre_ggin$measurement == this.level,]
+      r <- c(min(xx[,1]), max(xx[,5]))
+      out <- sapply(xx[,1:5],  function(line){
+        rescale(line,c(1,100), r)
+      })
+      data.frame(out, xx[,c(6,7,8)])
+    }, simplify = FALSE)
+  
+    yyy <- Reduce(rbind, xxx) %>% melt#
+  #  n <- input.list$cluster.object$global$size
+
+      n <- input.list$cluster.object[[1]]$size
+  names(n) <- paste('X', names(n), sep = '')
+  cluster_labeller <- function(val){
+    sapply(val, function(a){
+      cl <- pre_ggin[pre_ggin$newclust == a, 'cluster'][1]
+      paste0(a, ', N = ', n[cl])
+    })
+  }
+
+  by_cluster_split[[i]]<- ggplot(yyy,aes(x = measurement, y = value, fill = newclust)) +
+    geom_boxplot() +
+    facet_wrap(~newclust, scales="fixed", ncol=length(levels(pre_ggin$measurement))) +
+    theme(axis.text.x = element_text(angle=90, vjust=0.5, hjust=1))+
+    theme(legend.position="none") +
+    scale_fill_manual(values=values) +
+    ggtitle(paste0("Combined males and females grouped by cluster, cohort: ", i, ", N = ", input.list$split_lengths[i]))+
+    ylab("Level")+
+    xlab("Measurement")
+  
+ 
+#  if(create.pdf){
+#    pdf(paste0('Clusters combined ', paste(cohorts, collapse = ', '),".pdf"), height=12, width=20)
+#    pushViewport(viewport(layout = grid.layout(nrow = 2, ncol = 6)))
+#    plot(by_cluster_split[[i]], vp = viewport(layout.pos.row = 2, layout.pos.col = 1:4))
+#    plot(by_measure_split[[i]], vp = viewport(layout.pos.row = 1, layout.pos.col = 1:4))
+
+#    dev.off()
+#  }
+  } ## for i...
+  invisible(list(by_measure_split = by_measure_split, by_cluster_split = by_cluster_split))
 }
 
 do_pca <- function( cluster_obj, input_df = 'kmeans_input_scaled'){
