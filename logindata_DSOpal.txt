@@ -1,0 +1,14 @@
+server	url	user	password	table	driver
+andis	https://rhap-fdb01.vital-it.ch/andis	username	password	rhapsody.LB	OpalDriver
+dcs	https://rhap-fdb01.vital-it.ch/dcs	username	password	rhapsody.LB	OpalDriver
+godarts	https://rhap-fdb01.vital-it.ch/godarts	username	password	rhapsody.LB	OpalDriver
+abos	https://rhap-fdb01.vital-it.ch/abos	username	password	rhapsody.LB	OpalDriver
+colaus	https://rhap-fdb01.vital-it.ch/colaus	username	password	rhapsody.LB	OpalDriver
+accelerate	https://rhap-fdb01.vital-it.ch/accelerate	username	password	rhapsody.LB	OpalDriver
+desir	https://rhap-fdb01.vital-it.ch/desir	username	password	rhapsody.LB	OpalDriver
+botnia	https://rhap-fdb01.vital-it.ch/botnia	username	password	rhapsody.LB	OpalDriver
+mdc	https://rhap-fdb01.vital-it.ch/mdc	username	password	rhapsody.LB	OpalDriver
+glacier	https://rhap-fdb01.vital-it.ch/glacier	username	password	rhapsody.LB	OpalDriver
+addition-pro	https://rhap-fdb01.vital-it.ch/addition-pro	username	password	rhapsody.LB	OpalDriver
+addition-dk	https://rhap-fdb01.vital-it.ch/addition-dk	username	password	rhapsody.LB	OpalDriver
+

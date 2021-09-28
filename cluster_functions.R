@@ -1,130 +1,3 @@
-my.smooth2d <-  function (x, y, npoints = 128, 
-                          colour.pool = grep("\\d", grep("dark|deep", colours(), value = T), 
-                                             invert = T, value = T), shades = 8, draw.image = FALSE, 
-                          labels = TRUE, axes = TRUE, categories = NULL, emphasize_level = 0, type = "combine", 
-                          async = FALSE, wait = TRUE, datasources = NULL) 
-{
-  if (is.null(datasources)) {
-    datasources <- dsBaseClient:::findLoginObjects()
-  }
-  bandwidth <- list(x = .my.bw.args(x, datasources), y = .my.bw.args(y, 
-                                                                     datasources))
-  lims <- dssRange(x, y, type = type, datasources = datasources)
-  holder <- NULL
-  if (!is.null(categories)) {
-    keep.cols <- NULL
-    holder <- "tempSmooth"
-    dssSubsetByClass(c(x, y), subsets = holder, variables = categories, 
-                      keep.cols = keep.cols, async = async, wait = wait, 
-                      datasources = datasources)
-  }
-  bandwidth.arg <- dsSwissKnifeclient:::.encode.arg(bandwidth)
-  lims.arg <- dsSwissKnifeclient:::.encode.arg(lims)
-  holder <- dsSwissKnifeclient:::.encode.arg(holder)
-  expr <- paste0("partial.kde2d('", holder, "', '", x, "', '", 
-                 y, "','", bandwidth.arg, "','", lims.arg, "',", npoints, 
-                 ")")
-  res <- datashield.aggregate(datasources, as.symbol(expr), 
-                                    async = FALSE, wait = wait)
-  res <- res[!sapply(res, is.null)]
-  if (length(res) == 0) {
-    return(NULL)
-  }
-  if (draw.image) {
-    xlab <- ""
-    ylab <- ""
-    if (labels) {
-      xlab <- x
-      ylab <- y
-    }
-  }
-  sw <- dssSwapKeys(res)
-  if (type == "combine") {
-    img <- list(Combined = sapply(sw, function(this.level) {
-      list(x = this.level[[1]]$x, y = this.level[[1]]$y, 
-           z = Reduce("+", lapply(this.level, function(a) {
-             a$len * a$z
-           }))/Reduce("+", lapply(this.level, function(a) a$len)))
-    }, simplify = FALSE))
-  }
-  else {
-    img <- sapply(res, function(this.node) {
-      sapply(this.node, function(this.level) {
-        this.level[c("x", "y", "z")]
-      }, simplify = FALSE)
-    }, simplify = FALSE, USE.NAMES = TRUE)
-  }
-  my.legend <- NULL
-  if (draw.image) {
-    startcols <- list()
-    endcols <- list()
-    levs <- names(sw)
-    
-    st <- grep("\\d", grep("dark|deep", colour.pool, invert = T, 
-                           value = T), invert = T, value = T)
-    en <- grep("\\d", grep("light|white", colour.pool, invert = T, 
-                           value = T), invert = T, value = T)
-    startcols[levs] <- sample(colour.pool, length(levs))
-    endcols[levs] <- sample(setdiff(colour.pool, startcols[levs]), 
-                            length(levs))
-    startcols[levs] <- rep('white', length(levs))
-   # endcols[levs] <- c("#4DB3E6","#00B399","#E69900","#CC80B3","#8B1A4F")
-    endcols[levs] <- c("red", "green", "darkcyan", "orange", "blue")[1:length(levs)]
-    my.legend <- sapply(img, function(this.set) {
-      ret <- list()
-      categories <- names(this.set)
-      if(emphasize_level >0){
-        categories <- c(categories[-emphasize_level], categories[emphasize_level]) # move the important one in the upper layer
-      }
-      sapply(categories, function(this.name) {
-        ret[[this.name]] <<- c(startcols[[this.name]], 
-                               endcols[[this.name]])
-        if(emphasize_level > 0){
-          if(levs[emphasize_level] == this.name){
-            this.alpha <- 1
-          } else {
-            this.alpha <- 0.3
-  
-          }
-
-          image(this.set[[this.name]], col = dsSwissKnifeclient:::.add.alpha(colorRampPalette(c(startcols[[this.name]], 
-                                                                                           endcols[[this.name]]))(shades), c(0,rep(this.alpha, length.out = shades-1 ))), 
-                xlab = xlab, ylab = ylab, axes = axes)
-          
-        } else {
-          image(this.set[[this.name]], col = dsSwissKnifeclient:::.add.alpha(colorRampPalette(c(startcols[[this.name]], 
-                                                                                           endcols[[this.name]]))(shades), c(0, seq(0.2, 
-                                                                                                                                    0.8, length.out = shades - 1))), xlab = xlab, 
-                ylab = ylab, axes = axes)
-        }
-        par(new = T)
-      })
-      par(new = F)
-      return(ret)
-    }, simplify = FALSE)
-  }
-  ret <- list(lims = lims, img = img)
-  if (!is.null(my.legend)) {
-    ret[["legend"]] <- unlist(unname(my.legend), recursive = FALSE)
-  }
-  invisible(ret)
-}
-
-
-
-
-
-.my.bw.args <- function (x, datasources = NULL) 
-{
-  if (is.null(datasources)) {
-    datasources <- dsBaseClient:::findLoginObjects()
-  }
-  r <- (ds.quantileMean(x, type = "combine", datasources)[c("25%", 
-                                                            "75%")])
-  v <- ds.var(x, type = "combine", datasources)[[1]]
-  l <- ds.length(x, datasources, type = "combine")[[1]]
-  list(quarts = r, var = v, len = l)
-}
 
 prepare_cluster_andis <-  function(with.hdl = TRUE){
   this.cohort <- c('andis')
@@ -847,9 +720,13 @@ quants2 <- dssSwapKeys(sapply(quants2, dssSwapKeys))
   )
 }
 
-do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD', '5/MARD/low HDL', '6/MARD/high HDL'), create.pdf = TRUE){
+do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD', '5/MARD/low HDL', '6/MARD/high HDL'), create.pdf = TRUE, include.split = TRUE){
   args <- as.list(match.call())[-1]
-  split_gg <- do.call(split_ggplot, args)
+  args['include.split'] <- NULL
+  args <- args[!sapply(args, is.null)]
+  if(include.split){
+    split_gg <- do.call(split_ggplot, args)
+  }
   cohorts <- input.list$cohorts
   pre_gginput <- input.list$input[, c('X5.', 'X25.', 'X50.', 'X75.', 'X95.', 'measurement', 'cluster')] 
   pre_gginput$newclust <- rep(NA,nrow(pre_gginput))
@@ -932,24 +809,32 @@ do_ggplot <- function(input.list, cluster.labels =c('2/SIDD', '3/SIRD', '4/MOD',
   nclust <- length(levels(pre_gginput$cluster))
   if(create.pdf){
  #   pdf(paste0(nclust, ' Clusters combined ', paste(cohorts, collapse = ', '),".pdf"), height=12, width=20)
-    pdf(paste0(nclust, ' Clusters combined ', paste(cohorts, collapse = ', '),".pdf"), height=48, width=20)
-    
-    pushViewport(viewport(layout = grid.layout(nrow = 2* length(split_gg$by_cluster_split) + 2, ncol = 6)))
+  
+    offset <- 0
+    if(include.split){
+      offset <- length(split_gg$by_cluster_split)
+    }
+    pdf(paste0(nclust, ' Clusters combined ', paste(cohorts, collapse = ', '),".pdf"), height=12 + 6*offset, width=20)
+    pushViewport(viewport(layout = grid.layout(nrow = 2*offset  + 2, ncol = 6)))
     plot(by_measure, vp = viewport(layout.pos.row = 1, layout.pos.col = 1:4))
     plot(p2, vp = viewport(layout.pos.row = 1:2, layout.pos.col = 5:6))
     plot(by_cluster, vp = viewport(layout.pos.row = 2, layout.pos.col = 1:4))
-    
-    for(i in 1:length(split_gg$by_measure_split)){
-      plot(split_gg$by_measure_split[[i]], vp = viewport(layout.pos.row = i + 2, layout.pos.col = 1:4))
-    }
-    for(i in 1:length(split_gg$by_cluster_split)){
+    if(include.split){
+      for(i in 1:length(split_gg$by_measure_split)){
+        plot(split_gg$by_measure_split[[i]], vp = viewport(layout.pos.row = i + 2, layout.pos.col = 1:4))
+      }
+      for(i in 1:length(split_gg$by_cluster_split)){
    
-      plot(split_gg$by_cluster_split[[i]], vp = viewport(layout.pos.row = length(split_gg$by_cluster_split) + i +2, layout.pos.col = 1:4))
+        plot(split_gg$by_cluster_split[[i]], vp = viewport(layout.pos.row = length(split_gg$by_cluster_split) + i +2, layout.pos.col = 1:4))
+      }
     }
     
     dev.off()
   }
-  ret <- split_gg
+  ret <- list()
+  if(include.split){
+    ret <- split_gg
+  }
   ret$by_measure <- by_measure 
   ret$by_cluster <- by_cluster 
   ret$percentages <- p2 
